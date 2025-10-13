@@ -3,34 +3,38 @@ name: Grammar Check
 on:
   pull_request:
     paths:
-      - '**/*.md'     # Checks grammar in Markdown files. Adjust patterns for other text file types.
+      - '**/*.md'
 
 jobs:
   grammar:
-    name: Grammar Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install LanguageTool
-        run: |
-          wget https://www.languagetool.org/download/LanguageTool-stable.zip
-          unzip LanguageTool-stable.zip
-          sudo apt-get install default-jre
+      - name: Install Java (required for LanguageTool)
+        run: sudo apt-get update && sudo apt-get install -y default-jre
 
-      - name: Run Grammar Check
+      - name: Download LanguageTool
+        run: |
+          curl -L -o LanguageTool.zip https://languagetool.org/download/LanguageTool-stable.zip
+          unzip LanguageTool.zip
+
+      - name: Check for grammatical errors in changed Markdown files
         run: |
           set -e
-          errors=0
-          for file in $(git diff --name-only ${{ github.base_ref }} ${{ github.head_ref }} | grep -E '\.md$'); do
-            echo "Checking grammar in $file"
-            java -jar LanguageTool-*/LanguageTool.jar --language en-US "$file" > result.txt
-            if grep -q 'Line' result.txt; then
-              echo "::warning file=$file::Grammar issues found."
-              errors=$((errors+1))
+          # Get list of changed markdown files in the PR
+          FILES=$(git diff --name-only origin/${{ github.base_ref }} HEAD | grep -E '\.md$' || true)
+          ERRORS=0
+          for FILE in $FILES; do
+            echo "Checking grammar in $FILE"
+            java -jar LanguageTool-*/LanguageTool.jar --language en-US "$FILE" > result.txt
+            # Count grammar matches
+            if grep -q '<error' result.txt; then
+              echo "::warning file=$FILE::Grammar issues found in $FILE"
+              ERRORS=$((ERRORS+1))
             fi
           done
-          if [ $errors -eq 0 ]; then
+          if [ "$ERRORS" -eq 0 ]; then
             echo "No grammatical errors found."
           fi
