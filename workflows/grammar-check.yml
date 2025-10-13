@@ -1,0 +1,36 @@
+name: Grammar Check
+
+on:
+  pull_request:
+    paths:
+      - '**/*.md'     # Checks grammar in Markdown files. Adjust patterns for other text file types.
+
+jobs:
+  grammar:
+    name: Grammar Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install LanguageTool
+        run: |
+          wget https://www.languagetool.org/download/LanguageTool-stable.zip
+          unzip LanguageTool-stable.zip
+          sudo apt-get install default-jre
+
+      - name: Run Grammar Check
+        run: |
+          set -e
+          errors=0
+          for file in $(git diff --name-only ${{ github.base_ref }} ${{ github.head_ref }} | grep -E '\.md$'); do
+            echo "Checking grammar in $file"
+            java -jar LanguageTool-*/LanguageTool.jar --language en-US "$file" > result.txt
+            if grep -q 'Line' result.txt; then
+              echo "::warning file=$file::Grammar issues found."
+              errors=$((errors+1))
+            fi
+          done
+          if [ $errors -eq 0 ]; then
+            echo "No grammatical errors found."
+          fi
